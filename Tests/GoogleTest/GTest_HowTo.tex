@@ -1,0 +1,172 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{minted}
+\usepackage{url}
+
+\title{GTest - Quick How To}
+\date{Dec. 2021 - GoogleTests v1.11}
+
+\begin{document}
+
+\maketitle
+
+\section{Adding a new class test to CMake}
+
+Make sure there is an executable source with the following instructions:
+\begin{minted}{cpp}
+// file: launch_tests.cpp
+#include "gtest/gtest.h"      // COMPULSORY
+
+using namespace std;
+using namespace testing;
+
+int main(int argc, char **argv)
+{
+  testing::InitGoogleTest(&argc, argv); // COMPULSORY
+  return RUN_ALL_TESTS();    // COMPULSORY, called only ONCE
+}
+\end{minted}
+
+Note: The arguments are compulsory to pass options from the CMakefile to GTest.
+
+\bigskip
+In the \texttt{CMakeLists.txt}, you can add the following lines:
+\begin{minted}{cmake}
+    add_executable(runUnitTests launch_tests.cpp myClass_UT.cpp)
+\end{minted}
+where the file \texttt{myClass\_UT.cpp} will contain your new tests.
+
+\bigskip
+Declare your dependencies and then add those to the GoogleTests library by using:
+\begin{minted}{cmake}
+   target_link_libraries(runUnitTests PUBLIC ${CMAKE_PROJECT_NAME}
+                                              gtest
+                                              gtest_main)
+\end{minted}
+Add \texttt{pthread} to the list if your code run with multi-threading.
+
+\bigskip
+In order to create a special command that will run only your new executable \texttt{runUnitTests}, add also in the \texttt{CMakeLists.txt}:
+\begin{minted}{cmake}
+   add_test(NAME runUnitTests
+            COMMAND runUnitTests_cmd)
+\end{minted}
+
+\bigskip
+In your Terminal, you can now call:
+\begin{minted}{bash}
+> mkdir build
+> cd ./build
+> cmake .. && make runUnitTests
+> cd ./tests
+> ./runUnitTests --gtest_output="xml:report.xml"
+\end{minted}
+The option \texttt{--gtest\_output="xml:report.xml"} provides a .xml report compatible with Gitlab CI that describes the passed and failing tests. It is mandatory to validate the successful status of the pipeline.
+
+\section{Writing the new class test}
+
+In your file \texttt{CMakeLists.txt}, you can now write create your test suite.
+
+\subsection{Simple TEST}
+
+\begin{minted}{cpp}
+// file: myClass_UT.cpp
+#include "gtest/gtest.h" // COMPULSORY for each new file
+#include "myClass.cpp"  
+
+using namespace testing;
+
+class myClassTest : public ::testing::Test
+{
+protected:
+  myClassTest() {}      // COMPULSORY
+  ~myClassTest() {}     // COMPULSORY
+};
+
+TEST(myClassTest, worksWithFunc1)
+{
+  // Declare your variables here
+  // Make use of myClass::func1
+  // Compare the resulting value(s) from your expectation(s)
+  ASSERT_EQ(resulting_value, expected_value)
+            << "Msg to display in case of failure for func1";
+}
+
+TEST(myClassTest, worksWithFunc2)
+{
+  // Declare your variables here
+  // Make use of myClass::func2
+  // If you already have a boolean:
+  ASSERT_TRUE(myBool)
+            << "Msg to display in case of failure for func2";
+  ASSERT_FALSE(myBool)
+            << "Msg to display in case of failure for func2";   
+}
+\end{minted}
+
+Once this skeleton is in place, you can add as much tests as you need for the member functions of myClass.
+
+If some of your tests require the exact same data configuration for each test, you can use test fixtures.
+
+\subsection{Test Fixtures: TEST\_F}
+
+For each test, the data configuration declared in the \texttt{SetUp} will be reset to those values, no matter what has been modified in the previous tests: there is no need for global variables. Those SetUp values can also be inherited.
+
+\begin{minted}{cpp}
+// file: myClass_UT.cpp
+#include "gtest/gtest.h" // COMPULSORY for each new file
+#include "myClass.cpp"  
+
+using namespace testing;
+
+class myClassTest : public ::testing::Test
+{
+protected:
+  myClassTest() {}      // COMPULSORY
+  
+  // Declare your variable(s) here
+  myClass obj1;
+  ...
+  
+  // Assign values to your variables for the whole test set
+  virtual void SetUp() override
+  {
+     obj1 = value_x;
+     ...
+  }
+  // Free your variables if need be
+  virtual void TearDown() override {}
+  
+  ~myClassTest() {}     // COMPULSORY
+};
+
+// TEST_F = Test Fixture, which is allowed to used values in SetUp
+TEST_F(myClassTest, worksWithFunc1)
+{
+  // Declare your other variables here
+  // Make use of myClass::func1 with obj1 e.g.
+  // Compare the resulting value(s) from your expectation(s)
+  EXPECT_EQ(resulting_value, expected_value)
+            << "Msg to display in case of failure for func1";
+}
+\end{minted}
+
+Warnings: GoogleTest prevents the mix of TEST and TEST\_F!
+
+\subsubsection{Test Fixtures: The constructor vs the SetUp function}
+
+Each time a test is called, the constructor and the SetUp will be called - and if variables had their values set in one of those functions, they will therefore be reset to those values before the next test.
+
+Then why using the SetUp function? It is safer if an exception is thrown by one of the functions called inside of it. The constructor of the test class will not be able to dealt properly with it, and this may lead to crash.
+
+\section{Options}
+
+For more examples, please see the GitHub for GoogleTest, in particular their "samples" folder: \url{https://github.com/google/googletest/tree/master/googletest/samples}.
+\bigskip
+
+There are more advanced use of GoogleTest, described here: \url{https://google.github.io/googletest/advanced.html}.
+\bigskip
+
+For more variations on \texttt{ASSERT} and \texttt{EXPECT} commands, please see the Google Tests documentation at: \url{https://google.github.io/googletest/reference/assertions.html}.
+
+\end{document}
